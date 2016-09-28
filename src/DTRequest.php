@@ -5,12 +5,36 @@ use Symfony\Component\HttpFoundation\Request as SymfonyRequest;
 
 class DTRequest
 {
+    /**
+     * @var $request SymfonyRequest
+     */
     protected $request;
 
+    /**
+     * @var $columns Column[]
+     */
     protected $columns;
 
+    /**
+     * @var $start int
+     */
+    protected $start;
+
+    /**
+     * @var $length int
+     */
+    protected $length;
+
+    /**
+     * @var $search Search|null
+     */
     protected $search;
 
+    /**
+     * DTRequest constructor.
+     *
+     * @param SymfonyRequest $request
+     */
     public function __construct(
         SymfonyRequest $request
     )
@@ -19,11 +43,13 @@ class DTRequest
     }
 
     /**
+     * Get all the datatable columns.
+     *
      * @return Column[]
      */
     public function getColumns()
     {
-        $columns = $this->request->get('columns', []);
+        $columns = $this->get('columns', []);
 
         $columnObjects = [];
 
@@ -34,6 +60,31 @@ class DTRequest
         return $columnObjects;
     }
 
+    /**
+     * Get the start of the datatable.
+     *
+     * @return int
+     */
+    public function getStart()
+    {
+        return $this->get('start');
+    }
+
+    /**
+     * Get the length of the datatable.
+     *
+     * @return mixed
+     */
+    public function getLength()
+    {
+        return $this->get('length');
+    }
+
+    /**
+     * Get the search parameters.
+     *
+     * @return Search|null
+     */
     public function getSearch()
     {
         $search = $this->request->get('search', null);
@@ -45,14 +96,15 @@ class DTRequest
         return $search;
     }
 
+    /**
+     * Get a parameter from the request.
+     *
+     * @param $key
+     * @param null $default
+     * @return mixed
+     */
     public function get($key, $default = null)
     {
-        $allParameters = array_merge($this->request->request->all(), $this->request->query->all());
-
-        if(isset($allParameters[$key])) {
-            return $key;
-        }
-
-        return $default;
+        return $this->request->get($key, $default);
     }
 }
