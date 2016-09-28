@@ -1,3 +1,8 @@
 {
-  "name": "postitief/dbal-datatables"
+  "name": "postitief/dbal-datatables",
+  "autoload": {
+    "psr-4": {
+      "Postitief\\DBALDatatables\\": "src/"
+    }
+  }
 }
