@@ -5,6 +5,12 @@ use Doctrine\DBAL\Query\QueryBuilder;
 use Doctrine\DBAL\Connection;
 use Symfony\Component\HttpFoundation\Request as SymfonyRequest;
 
+/**
+ * Class DTBuilder
+ *
+ * @link https://datatables.net/manual/server-side#Returned-data
+ * @package Postitief\DBALDatatables
+ */
 class DTBuilder extends QueryBuilder
 {
     /**
@@ -44,6 +50,9 @@ class DTBuilder extends QueryBuilder
     {
         $dtb = clone($this);
 
+        $dtb->setFirstResult(null)
+            ->setMaxResults(null);
+
         $stmt = $dtb->resetQueryParts(['where', 'select'])
                     ->select("COUNT(*) as recordsTotal")
                     ->execute();
@@ -62,9 +71,12 @@ class DTBuilder extends QueryBuilder
      *
      * @return int
      */
-    private function getFilteredTotal()
+    private function getRecordsFilteredTotal()
     {
         $dtb = clone($this);
+
+        $dtb->setFirstResult(null)
+            ->setMaxResults(null);
 
         $stmt = $dtb->resetQueryParts(['select'])
             ->select("COUNT(*) as filteredTotal")
@@ -85,51 +97,18 @@ class DTBuilder extends QueryBuilder
      *
      * @return array
      */
-    public function getData()
+    private function getData()
     {
         $columns = $this->request->getColumns();
 
         // get searchable columns.
-        $searchableColumns = [];
-        foreach($columns as $column) {
-            if($column->isSearchable()) {
-                $searchableColumns[$column->getName()] = $column->getSearch();
-            }
-        }
+        $searchableColumns = $this->getSearchableColumns($columns);
 
-        foreach($columns as $column) {
-            if(
-            $column->isSearchable() &&
-            strlen($column->getSearch()->getValue()) > 0
-            ) {
-                $value = $column->getSearch()->getValue();
-                $name = $column->getName();
-                if(!$this->isAndWhere()) {
-                    $this->where("$name = :val")
-                        ->setParameter('val', $value);
-                } else {
-                    $this->andWhere("$name = :val")
-                        ->setParameter('val', $value);
-                }
-            }
-        }
+        // Create search based on all columns.
+        $this->createSearchableQuery($columns);
 
         // global search
-        if(
-            null !== $this->request->getSearch() &&
-            strlen($this->request->getSearch()->getValue()) > 0
-        ) {
-            $value = $this->request->getSearch()->getValue();
-            foreach($searchableColumns as $name => $search) {
-                if (!$this->isAndWhere()) {
-                    $this->where("$name LIKE :v")
-                        ->setParameter('v', '%' . $value . '%');
-                } else {
-                    $this->orWhere("$name LIKE :v")
-                        ->setParameter('v', '%' . $value . '%');
-                }
-            }
-        }
+        $this->createGlobalSearchQuery($searchableColumns);
 
         // the data to return.
         $data = [];
@@ -140,7 +119,7 @@ class DTBuilder extends QueryBuilder
             ->setMaxResults($this->request->getLength())
             ->execute();
 
-        foreach($stmt->fetchAll() as $record) {
+        foreach($stmt->fetchAll(\PDO::FETCH_ASSOC) as $record) {
             $data[] = array_values($record);
         }
 
@@ -162,13 +141,145 @@ class DTBuilder extends QueryBuilder
     }
 
     /**
-     * Get draw.
+     * Add all where statements based on all the columns.
      *
-     * @return int
+     * @param $columns
+     * @return array
      */
-    public function getDraw()
+    protected function createSearchableQuery($columns)
     {
-        return $this->request->get('draw', false) ? intval($this->request->get('draw')) : 0;
+        $i = 0;
+        foreach ($columns as $column)
+        {
+            if (
+                $column->isSearchable() &&
+                strlen($column->getSearch()->getValue()) > 0
+            ) {
+                $value = $column->getSearch()->getValue();
+                $name = $column->getName();
+
+                /**
+                 * if value contains >= or <= make an exception
+                 */
+                if($value[0] == '%' && $value[strlen($value) - 1] == '%') {
+                    $value = substr($value, 1, strlen($value) - 2);
+
+                    if(!$this->isAndWhere()) {
+                        $this->where("$name LIKE :val$i")
+                            ->setParameter('val' . $i, '%' . $value . '%');
+                    } else {
+                        $this->andWhere("$name LIKE :val$i")
+                            ->setParameter('val' . $i, '%' . $value . '%');
+                    }
+
+                    $i++;
+                    continue;
+                }
+
+                if(strpos($value, '&&') !== false) {
+                    $wheres = explode('&&', $value);
+
+                    foreach($wheres as $key => $where) {
+                        $wheres[$key] = substr($where, 2, strlen($where));
+                    }
+
+                    if(!$this->isAndWhere()) {
+                        $this->where("$name >= :val$i")
+                            ->setParameter('val' . $i, $wheres[0]);
+                    } else {
+                        $this->andWhere("$name >= :val$i")
+                            ->setParameter('val' . $i, $wheres[0]);
+                    }
+
+                    if(!$this->isAndWhere()) {
+                        $this->where("$name <= :valste$i")
+                            ->setParameter('valste' . $i, $wheres[1]);
+                    } else {
+                        $this->andWhere("$name <= :valste$i")
+                            ->setParameter('valste' . $i, $wheres[1]);
+                    }
+
+                    $i++;
+                    continue;
+                }
+
+                if(strpos($value, '>=') !== false) {
+                    $value = substr($value, 2, strlen($value));
+                    if (!$this->isAndWhere()) {
+                        $this->where("$name >= :val$i")
+                            ->setParameter('val' . $i, $value);
+                    } else {
+                        $this->andWhere("$name >= :val$i")
+                            ->setParameter('val' . $i, $value);
+                    }
+                    $i++;
+                    continue;
+                } elseif(strpos($value, '<=') !== false) {
+                    $value = substr($value, 2, strlen($value));
+                    if (!$this->isAndWhere()) {
+                        $this->where("$name <= :val$i")
+                            ->setParameter('val' . $i, $value);
+                    } else {
+                        $this->andWhere("$name <= :val$i")
+                            ->setParameter('val' . $i, $value);
+                    }
+                    $i++;
+                    continue;
+                }
+
+                if (!$this->isAndWhere()) {
+                    $this->where("$name = :val$i")
+                        ->setParameter('val' . $i, $value);
+                } else {
+                    $this->andWhere("$name = :val$i")
+                        ->setParameter('val' . $i, $value);
+                }
+                $i++;
+            }
+        }
+    }
+
+    /**
+     * Create the global search query.
+     *
+     * @param $searchableColumns
+     */
+    protected function createGlobalSearchQuery($searchableColumns)
+    {
+        $i = 0;
+        if (
+            null !== $this->request->getSearch() &&
+            strlen($this->request->getSearch()->getValue()) > 0
+        ) {
+            foreach ($searchableColumns as $name => $search) {
+                $value = $this->request->getSearch()->getValue();
+                if (!$this->isAndWhere()) {
+                    $this->where("$name LIKE :v$i")
+                        ->setParameter('v' . $i, '%' . $value . '%');
+                } else {
+                    $this->orWhere("$name LIKE :v")
+                        ->setParameter('v' . $i, '%' . $value . '%');
+                }
+                $i++;
+            }
+        }
+    }
+
+    /**
+     * Get all the columns where we can search on.
+     *
+     * @param $columns
+     * @return array
+     */
+    private function getSearchableColumns($columns)
+    {
+        $searchableColumns = [];
+        foreach ($columns as $column) {
+            if ($column->isSearchable()) {
+                $searchableColumns[$column->getName()] = $column->getSearch();
+            }
+        }
+        return $searchableColumns;
     }
 
     /**
@@ -178,11 +289,15 @@ class DTBuilder extends QueryBuilder
      */
     public function build()
     {
+        // First execute the getData to be sure the where clauses of this query builder are filled.
+        // Then we can calculate the recordsTotal and the recordsFiltered.
+        $data = $this->getData();
+
         return [
-            'draw' => $this->getDraw(),
+            'draw' => $this->request->getDraw(),
             'recordsTotal' => $this->getRecordsTotal(),
-            'filteredTotal' => $this->getFilteredTotal(),
-            'data' => $this->getData(),
+            'recordsFiltered' => $this->getRecordsFilteredTotal(),
+            'data' => $data,
         ];
     }
 }

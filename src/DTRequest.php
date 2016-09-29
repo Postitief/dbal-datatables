@@ -97,6 +97,16 @@ class DTRequest
     }
 
     /**
+     * Get draw.
+     *
+     * @return int
+     */
+    public function getDraw()
+    {
+        return $this->get('draw', false) ? intval($this->get('draw')) : 0;
+    }
+
+    /**
      * Get a parameter from the request.
      *
      * @param $key
