@@ -104,6 +104,13 @@ class DTBuilder extends QueryBuilder
         // get searchable columns.
         $searchableColumns = $this->getSearchableColumns($columns);
 
+        // Add selects based on the colomns.
+        foreach ($columns as $column) {
+            $parts = explode('.', $column->getName());
+            $select = "`".implode("`.`", $parts)."`";
+            $this->addSelect($select);
+        }
+
         // Create search based on all columns.
         $this->createSearchableQuery($columns);
 
