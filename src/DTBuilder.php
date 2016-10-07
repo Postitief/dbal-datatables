@@ -42,11 +42,21 @@ class DTBuilder extends QueryBuilder
     }
 
     /**
+     * Return the DTRequest object.
+     *
+     * @return DTRequest
+     */
+    public function getRequest()
+    {
+        return $this->request;
+    }
+
+    /**
      * Get the total records.
      *
      * @return int
      */
-    private function getRecordsTotal()
+    public function getRecordsTotal()
     {
         $dtb = clone($this);
 

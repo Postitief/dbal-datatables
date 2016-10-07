@@ -83,17 +83,13 @@ class DTRequest
     /**
      * Get the search parameters.
      *
-     * @return Search|null
+     * @return Search
      */
     public function getSearch()
     {
-        $search = $this->request->get('search', null);
+        $search = $this->request->get('search');
 
-        if(null !== $search) {
-            return new Search($search);
-        }
-
-        return $search;
+        return new Search($search);
     }
 
     /**
