@@ -54,8 +54,8 @@ class DTBuilder extends QueryBuilder
             ->setMaxResults(null);
 
         $stmt = $dtb->resetQueryParts(['where', 'select'])
-                    ->select("COUNT(*) as recordsTotal")
-                    ->execute();
+            ->select("COUNT(*) as recordsTotal")
+            ->execute();
 
         $result = $stmt->fetch();
 
@@ -119,7 +119,7 @@ class DTBuilder extends QueryBuilder
             ->setMaxResults($this->request->getLength())
             ->execute();
 
-        foreach($stmt->fetchAll(\PDO::FETCH_ASSOC) as $record) {
+        foreach ($stmt->fetchAll(\PDO::FETCH_ASSOC) as $record) {
             $data[] = array_values($record);
         }
 
@@ -133,7 +133,7 @@ class DTBuilder extends QueryBuilder
      */
     private function isAndWhere()
     {
-        if(null !== $this->getQueryPart('where')) {
+        if (null !== $this->getQueryPart('where')) {
             return true;
         }
 
@@ -149,8 +149,7 @@ class DTBuilder extends QueryBuilder
     protected function createSearchableQuery($columns)
     {
         $i = 0;
-        foreach ($columns as $column)
-        {
+        foreach ($columns as $column) {
             if (
                 $column->isSearchable() &&
                 strlen($column->getSearch()->getValue()) > 0
@@ -161,10 +160,10 @@ class DTBuilder extends QueryBuilder
                 /**
                  * if value contains >= or <= make an exception
                  */
-                if($value[0] == '%' && $value[strlen($value) - 1] == '%') {
+                if ($value[0] == '%' && $value[strlen($value) - 1] == '%') {
                     $value = substr($value, 1, strlen($value) - 2);
 
-                    if(!$this->isAndWhere()) {
+                    if (!$this->isAndWhere()) {
                         $this->where("$name LIKE :val$i")
                             ->setParameter('val' . $i, '%' . $value . '%');
                     } else {
@@ -176,14 +175,14 @@ class DTBuilder extends QueryBuilder
                     continue;
                 }
 
-                if(strpos($value, '&&') !== false) {
+                if (strpos($value, '&&') !== false) {
                     $wheres = explode('&&', $value);
 
-                    foreach($wheres as $key => $where) {
+                    foreach ($wheres as $key => $where) {
                         $wheres[$key] = substr($where, 2, strlen($where));
                     }
 
-                    if(!$this->isAndWhere()) {
+                    if (!$this->isAndWhere()) {
                         $this->where("$name >= :val$i")
                             ->setParameter('val' . $i, $wheres[0]);
                     } else {
@@ -191,7 +190,7 @@ class DTBuilder extends QueryBuilder
                             ->setParameter('val' . $i, $wheres[0]);
                     }
 
-                    if(!$this->isAndWhere()) {
+                    if (!$this->isAndWhere()) {
                         $this->where("$name <= :valste$i")
                             ->setParameter('valste' . $i, $wheres[1]);
                     } else {
@@ -203,7 +202,7 @@ class DTBuilder extends QueryBuilder
                     continue;
                 }
 
-                if(strpos($value, '>=') !== false) {
+                if (strpos($value, '>=') !== false) {
                     $value = substr($value, 2, strlen($value));
                     if (!$this->isAndWhere()) {
                         $this->where("$name >= :val$i")
@@ -214,7 +213,7 @@ class DTBuilder extends QueryBuilder
                     }
                     $i++;
                     continue;
-                } elseif(strpos($value, '<=') !== false) {
+                } elseif (strpos($value, '<=') !== false) {
                     $value = substr($value, 2, strlen($value));
                     if (!$this->isAndWhere()) {
                         $this->where("$name <= :val$i")
@@ -251,16 +250,28 @@ class DTBuilder extends QueryBuilder
             null !== $this->request->getSearch() &&
             strlen($this->request->getSearch()->getValue()) > 0
         ) {
-            foreach ($searchableColumns as $name => $search) {
-                $value = $this->request->getSearch()->getValue();
-                if (!$this->isAndWhere()) {
-                    $this->where("$name LIKE :v$i")
-                        ->setParameter('v' . $i, '%' . $value . '%');
-                } else {
-                    $this->orWhere("$name LIKE :v")
-                        ->setParameter('v' . $i, '%' . $value . '%');
+            if (!$this->isAndWhere()) {
+                foreach ($searchableColumns as $name => $search) {
+                    $value = $this->request->getSearch()->getValue();
+                    if (!$this->isAndWhere()) {
+                        $this->where("$name LIKE :v$i")
+                            ->setParameter('v' . $i, '%' . $value . '%');
+                    } else {
+                        $this->orWhere("$name LIKE :v$i")
+                            ->setParameter('v' . $i, '%' . $value . '%');
+                    }
+                    $i++;
                 }
-                $i++;
+            } else {
+                $orX = $this->expr()->orX();
+
+                foreach ($searchableColumns as $name => $search) {
+                    $value = $this->request->getSearch()->getValue();
+                    $value = '%' . $value . '%';
+                    $orX->add($this->expr()->like($name, $this->getConnection()->quote($value)));
+                }
+
+                $this->andWhere($orX);
             }
         }
     }
