@@ -170,15 +170,14 @@ class DTBuilder extends QueryBuilder
                 /**
                  * if value contains >= or <= make an exception
                  */
-                if ($value[0] == '%' && $value[strlen($value) - 1] == '%') {
-                    $value = substr($value, 1, strlen($value) - 2);
 
+                if( strpos($value, '%') !== false) {
                     if (!$this->isAndWhere()) {
                         $this->where("$name LIKE :val$i")
-                            ->setParameter('val' . $i, '%' . $value . '%');
+                            ->setParameter('val' . $i, $value);
                     } else {
                         $this->andWhere("$name LIKE :val$i")
-                            ->setParameter('val' . $i, '%' . $value . '%');
+                            ->setParameter('val' . $i, $value);
                     }
 
                     $i++;
