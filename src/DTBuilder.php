@@ -56,22 +56,36 @@ class DTBuilder extends QueryBuilder
      *
      * @return int
      */
-    public function getRecordsTotal()
+    public function getRecordsTotal($keep = null)
     {
         $dtb = clone($this);
 
         $dtb->setFirstResult(null)
             ->setMaxResults(null);
 
-        $stmt = $dtb->resetQueryParts(['where', 'select'])
-            ->select("COUNT(*) as recordsTotal")
-            ->execute();
+        $stmt = $dtb->resetQueryParts(['where']);
 
-        $result = $stmt->fetch();
+        if(count($keep) > 0){
+            $i = 0;
+            foreach($keep as $col => $val){
+                $stmt->where("$col = :val$i")->setParameter('val' . $i, $val);
+                $i++;
+            }
+        }
+        $sql = $stmt->getSQL();
+
+        $dtbSub = $dtb->getConnection()->createQueryBuilder();
+
+        $result = $dtbSub->select("COUNT(*) as recordsTotal")
+            ->from("($sql) as x")
+            ->setParameters($stmt->getParameters())
+            ->execute()
+            ->fetch();
 
         $recordsTotal = $result['recordsTotal'];
 
         unset($dtb);
+        unset($dtbSub);
 
         return intval($recordsTotal);
     }
@@ -88,17 +102,23 @@ class DTBuilder extends QueryBuilder
         $dtb->setFirstResult(null)
             ->setMaxResults(null);
 
-        $stmt = $dtb->resetQueryParts(['select'])
-            ->select("COUNT(*) as filteredTotal")
-            ->execute();
+        $stmt = $dtb->getSQL();
 
-        $result = $stmt->fetch();
 
-        $filteredTotal = $result['filteredTotal'];
+        $dtbSub = $dtb->getConnection()->createQueryBuilder();
+
+        $result = $dtbSub->select("COUNT(*) as filteredTotal")
+            ->from("($stmt) as x")
+            ->setParameters($dtb->getParameters())
+            ->execute()
+            ->fetch();
+
+        $recordsTotal = $result['filteredTotal'];
 
         unset($dtb);
+        unset($dtbSub);
 
-        return intval($filteredTotal);
+        return intval($recordsTotal);
     }
 
     /**
@@ -171,7 +191,34 @@ class DTBuilder extends QueryBuilder
                  * if value contains >= or <= make an exception
                  */
 
-                if( strpos($value, '%') !== false) {
+
+                /**
+                 * OR search over multiple columns
+                 */
+                if (strpos($value, '||') !== false) {
+                    $value = substr($value, 1);
+                    $tmp = explode(")", $value);
+                    $search_string = $tmp[1];
+                    $columns = explode("||", $tmp[0]);
+
+                    $orX = $this->expr()->orX();
+                    foreach ($columns as $name) {
+                        $value = $search_string;
+                        $value = '%' . $value . '%';
+                        $orX->add($this->expr()->like($name, $this->getConnection()->quote($value)));
+                    }
+
+                    if (!$this->isAndWhere()) {
+                        $this->where($orX);
+                    } else {
+                        $this->andWhere($orX);
+                    }
+                    $i++;
+                    continue;
+
+                }
+
+                if (strpos($value, '%') !== false) {
                     if (!$this->isAndWhere()) {
                         $this->where("$name LIKE :val$i")
                             ->setParameter('val' . $i, $value);
@@ -305,9 +352,10 @@ class DTBuilder extends QueryBuilder
     /**
      * Build the datatable output.
      *
+     * @param null $keep
      * @return array
      */
-    public function build()
+    public function build($keep = null)
     {
         // First execute the getData to be sure the where clauses of this query builder are filled.
         // Then we can calculate the recordsTotal and the recordsFiltered.
@@ -315,7 +363,7 @@ class DTBuilder extends QueryBuilder
 
         return [
             'draw' => $this->request->getDraw(),
-            'recordsTotal' => $this->getRecordsTotal(),
+            'recordsTotal' => $this->getRecordsTotal($keep),
             'recordsFiltered' => $this->getRecordsFilteredTotal(),
             'data' => $data,
         ];
