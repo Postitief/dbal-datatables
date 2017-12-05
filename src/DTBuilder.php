@@ -56,8 +56,13 @@ class DTBuilder extends QueryBuilder
      *
      * @return int
      */
-    public function getRecordsTotal($keep = null)
+    public function getRecordsTotal($keep = null, $skip = false)
     {
+        if($skip === true){
+            return 0;
+        }
+
+
         $dtb = clone($this);
 
         $dtb->setFirstResult(null)
@@ -355,7 +360,7 @@ class DTBuilder extends QueryBuilder
      * @param null $keep
      * @return array
      */
-    public function build($keep = null)
+    public function build($keep = null, $noTotal = false)
     {
         // First execute the getData to be sure the where clauses of this query builder are filled.
         // Then we can calculate the recordsTotal and the recordsFiltered.
@@ -363,9 +368,9 @@ class DTBuilder extends QueryBuilder
 
         return [
             'draw' => $this->request->getDraw(),
-            'recordsTotal' => $this->getRecordsTotal($keep),
+            'recordsTotal' => $this->getRecordsTotal($keep, $noTotal),
             'recordsFiltered' => $this->getRecordsFilteredTotal(),
-            'data' => $data,
+            'data' => $data
         ];
     }
 }
