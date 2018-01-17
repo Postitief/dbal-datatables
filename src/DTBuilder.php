@@ -102,13 +102,25 @@ class DTBuilder extends QueryBuilder
      */
     private function getRecordsFilteredTotal()
     {
+
+        if (strpos($this->getSQL(), 'SQL_CALC_FOUND_ROWS') !== false) {
+            # Query contains CALC ROWS. Get records from that
+            # SELECT FOUND_ROWS();
+            $stmt = $this->getConnection()->createQueryBuilder()
+                ->select('FOUND_ROWS() as unfiltered')
+                ->execute()
+                ->fetch();
+
+            return intval($stmt['unfiltered']);
+
+        }
+
         $dtb = clone($this);
 
         $dtb->setFirstResult(null)
             ->setMaxResults(null);
 
         $stmt = $dtb->getSQL();
-
 
         $dtbSub = $dtb->getConnection()->createQueryBuilder();
 
@@ -367,9 +379,9 @@ class DTBuilder extends QueryBuilder
         $data = $this->getData();
 
         return [
+            'recordsFiltered' => $this->getRecordsFilteredTotal(),
             'draw' => $this->request->getDraw(),
             'recordsTotal' => $this->getRecordsTotal($keep, $noTotal),
-            'recordsFiltered' => $this->getRecordsFilteredTotal(),
             'data' => $data
         ];
     }
